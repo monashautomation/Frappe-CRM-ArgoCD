@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - external-secrets.yaml
+  - configmap.yaml
+  - pvc.yaml
+  - mariadb.yaml
+  - redis.yaml
+  - bootstrap-job.yaml
+  - frappe.yaml
+  - ingress.yaml
+configMapGenerator:
+  - name: frappe-crm-bootstrap
+    files:
+      - scripts/bootstrap.sh
+      - scripts/bootstrap_sso.py
+images:
+  - name: ghcr.io/monashautomation/frappe-crm
+    newName: ghcr.io/monashautomation/frappe-crm
+    newTag: latest

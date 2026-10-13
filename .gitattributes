@@ -1,2 +1,6 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Scripts run inside Linux containers; CRLF breaks bash shebangs
+*.sh text eol=lf
+*.py text eol=lf

@@ -1,0 +1,67 @@
+name: Build image and deploy
+
+# Frappe apps are baked into the image, so CRM is not in the stock frappe/erpnext
+# image. Rebuild when the app list changes, weekly to pick up CRM/Frappe fixes, or by hand.
+on:
+  push:
+    branches: [main]
+    paths:
+      - image/**
+      - .github/workflows/build-image.yml
+  schedule:
+    - cron: "0 17 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/checkout@v4
+        with:
+          repository: frappe/frappe_docker
+          path: frappe_docker
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: frappe_docker
+          file: frappe_docker/images/layered/Containerfile
+          push: true
+          tags: ghcr.io/monashautomation/frappe-crm:sha-${{ github.sha }}
+          build-args: |
+            FRAPPE_PATH=https://github.com/frappe/frappe
+            FRAPPE_BRANCH=version-16
+            CACHE_BUST=${{ github.run_id }}
+          secret-files: |
+            apps_json=image/apps.json
+
+      - name: Bump overlay image tag
+        env:
+          IMAGE_SHA: sha-${{ github.sha }}
+        run: |
+          cd deploy/overlays/prod
+          npx --yes kustomize edit set image \
+            "ghcr.io/monashautomation/frappe-crm=ghcr.io/monashautomation/frappe-crm:${IMAGE_SHA}"
+
+      - name: Commit updated manifests
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add deploy/overlays/prod/kustomization.yaml
+          git diff --cached --quiet || git commit -m "chore: deploy sha-${{ github.sha }}"
+          git pull --rebase
+          git push

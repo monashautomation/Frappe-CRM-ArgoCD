@@ -1,0 +1,81 @@
+# Idempotent bootstrap, re-run on every sync (like directory-migrate):
+#   first run  -> write common_site_config, create site, install CRM, configure Authentik SSO
+#   later runs -> bench migrate (picks up new image), re-apply SSO config
+# Runs at wave 1 so MariaDB/Redis/PVCs (wave 0) are up, and before the Frappe pods (wave 2),
+# which need sites/common_site_config.json to exist.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: frappe-crm-bootstrap
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      imagePullSecrets:
+        - name: ghcr-pull-secret
+      initContainers:
+        - name: fix-perms
+          image: ghcr.io/monashautomation/frappe-crm:latest
+          command: ["sh", "-c", "chown -R 1000:1000 /home/frappe/frappe-bench/sites"]
+          securityContext:
+            runAsUser: 0
+            runAsNonRoot: false
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+              add: ["CHOWN", "FOWNER", "DAC_OVERRIDE"]
+          volumeMounts:
+            - name: sites
+              mountPath: /home/frappe/frappe-bench/sites
+      containers:
+        - name: bootstrap
+          image: ghcr.io/monashautomation/frappe-crm:latest
+          command: ["bash", "/scripts/bootstrap.sh"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          envFrom:
+            - configMapRef:
+                name: frappe-crm-config
+            - secretRef:
+                name: frappe-crm-web-secrets
+          env:
+            - name: DB_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: frappe-crm-mariadb-secrets
+                  key: MARIADB_ROOT_PASSWORD
+          volumeMounts:
+            - name: sites
+              mountPath: /home/frappe/frappe-bench/sites
+            - name: logs
+              mountPath: /home/frappe/frappe-bench/logs
+            - name: scripts
+              mountPath: /scripts
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              memory: 1Gi
+      volumes:
+        - name: sites
+          persistentVolumeClaim:
+            claimName: frappe-crm-sites
+        - name: logs
+          emptyDir: {}
+        - name: scripts
+          configMap:
+            name: frappe-crm-bootstrap

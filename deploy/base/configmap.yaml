@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: frappe-crm-config
+data:
+  # Frappe's site name doubles as the public hostname (nginx routes on it).
+  SITE_NAME: "crm.monashautomation.com"
+  DB_HOST: "frappe-crm-mariadb"
+  REDIS_CACHE: "redis://frappe-crm-redis-cache:6379"
+  REDIS_QUEUE: "redis://frappe-crm-redis-queue:6379"
+  AUTHENTIK_BASE_URL: "https://auth.monashautomation.com"
+  AUTHENTIK_PROVIDER_NAME: "authentik"
+  # Role given to every account created by first SSO login. It has desk access, so
+  # Frappe promotes the account to System User; CRM refuses plain Website Users.
+  SSO_DEFAULT_ROLE: "Sales User"
+  # Set to "1" once SSO is verified to hide the username/password form. Keep "0" until
+  # you are sure an Authentik outage can't lock you out (recovery then needs kubectl exec
+  # into a Frappe pod: `bench --site <site> set-value "System Settings" disable_user_pass_login 0`).
+  DISABLE_PASSWORD_LOGIN: "0"

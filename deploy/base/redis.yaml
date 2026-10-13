@@ -1,0 +1,111 @@
+# Frappe wants two Redis instances: cache (disposable) and queue (background jobs + realtime).
+# Neither is persisted; a restart drops queued jobs, which Frappe's scheduler re-enqueues.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frappe-crm-redis-cache
+  labels:
+    app: frappe-crm-redis-cache
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app: frappe-crm-redis-cache
+  template:
+    metadata:
+      labels:
+        app: frappe-crm-redis-cache
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          args: ["--save", "", "--appendonly", "no", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+          ports:
+            - containerPort: 6379
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 384Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frappe-crm-redis-cache
+spec:
+  selector:
+    app: frappe-crm-redis-cache
+  ports:
+    - port: 6379
+      targetPort: 6379
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frappe-crm-redis-queue
+  labels:
+    app: frappe-crm-redis-queue
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app: frappe-crm-redis-queue
+  template:
+    metadata:
+      labels:
+        app: frappe-crm-redis-queue
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          args: ["--save", "", "--appendonly", "no"]
+          ports:
+            - containerPort: 6379
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frappe-crm-redis-queue
+spec:
+  selector:
+    app: frappe-crm-redis-queue
+  ports:
+    - port: 6379
+      targetPort: 6379

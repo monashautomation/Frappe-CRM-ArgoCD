@@ -1,0 +1,22 @@
+# Shared by every Frappe pod (site config, uploaded files) -> needs ReadWriteMany.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: frappe-crm-sites
+spec:
+  accessModes: ["ReadWriteMany"]
+  storageClassName: nfs-client
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: frappe-crm-mariadb-data
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: nfs-client
+  resources:
+    requests:
+      storage: 10Gi
