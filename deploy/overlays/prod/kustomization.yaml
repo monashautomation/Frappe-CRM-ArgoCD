@@ -6,4 +6,4 @@ resources:
 images:
 - name: ghcr.io/monashautomation/frappe-crm
   newName: ghcr.io/monashautomation/frappe-crm
-  newTag: latest
+  newTag: sha-aefd8b35f3c65ffe5a8b33e0fd584aee45976342
