@@ -1,0 +1,108 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frappe-crm-mariadb
+  labels:
+    app: frappe-crm-mariadb
+spec:
+  replicas: 1 # single-writer PVC (ReadWriteOnce) - do not scale
+  revisionHistoryLimit: 3
+  strategy:
+    type: Recreate # avoid two pods mounting the same RWO volume during rollout
+  selector:
+    matchLabels:
+      app: frappe-crm-mariadb
+  template:
+    metadata:
+      labels:
+        app: frappe-crm-mariadb
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        # nfs-client volumes come up root-owned; fsGroup is not honoured on NFS.
+        - name: fix-perms
+          image: mariadb:11.8
+          command: ["sh", "-c", "chown -R 999:999 /var/lib/mysql"]
+          securityContext:
+            runAsUser: 0
+            runAsNonRoot: false
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+              add: ["CHOWN", "FOWNER"]
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/mysql
+      containers:
+        - name: mariadb
+          image: mariadb:11.8
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          env:
+            - name: MARIADB_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: frappe-crm-mariadb-secrets
+                  key: MARIADB_ROOT_PASSWORD
+          # First four are Frappe's required MariaDB settings.
+          # innodb_flush_log_at_trx_commit=2: the datadir is on nfs-client, where every
+          # redo-log fsync round-trips over the network. Trades up to ~1s of commits on a
+          # hard node crash for avoiding per-commit NFS stalls (same trade-off as
+          # synchronous_commit=off in bambuddy-k8s). Pod restarts are unaffected.
+          args:
+            - --character-set-server=utf8mb4
+            - --collation-server=utf8mb4_unicode_ci
+            - --skip-character-set-client-handshake
+            - --skip-innodb-read-only-compress
+            - --innodb-flush-log-at-trx-commit=2
+          ports:
+            - containerPort: 3306
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/mysql
+          readinessProbe:
+            tcpSocket:
+              port: 3306
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 3306
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          startupProbe:
+            # InnoDB crash recovery on NFS can be slow; don't let liveness kill it mid-recovery.
+            tcpSocket:
+              port: 3306
+            periodSeconds: 10
+            failureThreshold: 60
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              memory: 1Gi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: frappe-crm-mariadb-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frappe-crm-mariadb
+spec:
+  selector:
+    app: frappe-crm-mariadb
+  ports:
+    - name: mysql
+      port: 3306
+      targetPort: 3306
