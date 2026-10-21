@@ -46,7 +46,7 @@ At `https://auth.monashautomation.com/if/admin/`:
 
 ## 3. OpenBao
 
-Enable a KV v2 engine at path `frappe-crm`, then create:
+In the OpenBao UI (`https://openbao.monashautomation.com/`), enable a KV v2 engine at path `frappe-crm`, then create:
 
 - `frappe-crm/web`
 
@@ -83,9 +83,32 @@ kubectl get secret ghcr-pull-secret -n ticketing -o json \
   | kubectl apply -n frappe-crm -f -
 ```
 
-## 5. DNS / tunnel
+## 5. DNS / tunnel / routing
 
-`crm.monashautomation.com` must reach the same Traefik ingress as the other apps (wildcard record or Cloudflare Tunnel hostname).
+`crm.monashautomation.com` must reach the same Traefik as the other apps (wildcard record or Cloudflare Tunnel hostname).
+
+This repo ships a standard `Ingress` (Traefik class + cert-manager), as `directory-service` does. If you instead route apps through the central `IngressRoute` file (as for `kan`, `inventory`, etc.), delete `deploy/base/ingress.yaml` (and its line in `kustomization.yaml`) and add this to that file:
+
+```yaml
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: frappe-crm-route
+  namespace: frappe-crm
+spec:
+  entryPoints:
+    - websecure
+  routes:
+  - match: Host(`crm.monashautomation.com`)
+    kind: Rule
+    services:
+    - name: frappe-crm-nginx
+      port: 80
+      scheme: http
+```
+
+Do not add the `authentik-global-auth` forward-auth middleware: Frappe does its own OIDC login, and forward auth in front of it would break the OAuth callback and API calls.
 
 ## 6. Register with ArgoCD
 
