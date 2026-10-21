@@ -1,6 +1,6 @@
 # Frappe CRM - production setup
 
-Same shape as `directory-service`: Kustomize in `deploy/`, ArgoCD Application in `argocd/`, OpenBao via External Secrets, Traefik + cert-manager ingress, `nfs-client` storage, image built to GHCR by GitHub Actions.
+Same shape as `directory-service`: Kustomize in `deploy/`, ArgoCD Application in `argocd/`, OpenBao via External Secrets, Traefik IngressRoute (central routes file), `nfs-client` storage, image built to GHCR by GitHub Actions.
 
 Served at `https://crm.monashautomation.com`, namespace `frappe-crm`.
 
@@ -11,7 +11,7 @@ Served at `https://crm.monashautomation.com`, namespace `frappe-crm`.
 | 0    | ExternalSecrets, ConfigMap, PVCs, MariaDB, Redis (cache + queue)                                                             |
 | 1    | `frappe-crm-bootstrap` hook Job: writes site config, creates site + installs CRM (first run) or `bench migrate`, configures SSO |
 | 2    | gunicorn, nginx, socketio, 3 workers, scheduler                                                                              |
-| 3    | Ingress                                                                                                                      |
+| 3    | (none - routing is the central IngressRoute, see step 5)                                                                                |
 
 CRM is not in the stock `frappe/erpnext` image, so `image/apps.json` + `.github/workflows/build-image.yml` build a Frappe v16 image with CRM baked in (frappe_docker layered build). Pushing to `main` with changes under `image/`, a weekly cron, or a manual run rebuilds it and commits the new tag to `deploy/overlays/prod/kustomization.yaml`.
 
@@ -85,9 +85,9 @@ kubectl get secret ghcr-pull-secret -n ticketing -o json \
 
 ## 5. DNS / tunnel / routing
 
-`crm.monashautomation.com` must reach the same Traefik as the other apps (wildcard record or Cloudflare Tunnel hostname).
+`crm.monashautomation.com` must reach the same Traefik as the other apps (wildcard record or Cloudflare Tunnel hostname). TLS ends at the tunnel, as for the other apps, so there is no cert-manager certificate.
 
-This repo ships a standard `Ingress` (Traefik class + cert-manager), as `directory-service` does. If you instead route apps through the central `IngressRoute` file (as for `kan`, `inventory`, etc.), delete `deploy/base/ingress.yaml` (and its line in `kustomization.yaml`) and add this to that file:
+Routing is **not** in this repo. Add this to the central IngressRoute file (alongside `kan`, `inventory`, etc.). The app is unreachable until it is applied:
 
 ```yaml
 ---
