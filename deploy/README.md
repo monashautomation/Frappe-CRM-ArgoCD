@@ -27,7 +27,7 @@ CRM is not in the stock `frappe/erpnext` image, so `image/apps.json` + `.github/
 
 1. Repo is `monashautomation/Frappe-CRM-ArgoCD`. Settings -> Actions -> General -> Workflow permissions -> **Read and write** (push to GHCR, commit tag bump).
 2. Push `main`, then run the **Build image and deploy** workflow once (Actions -> Run workflow). The first sync needs an image that exists.
-3. After the first build, set the GHCR package `frappe-crm` visibility/permissions as you do for `directory-web`.
+3. After the first build, make the GHCR package **public** (GitHub -> your org -> Packages -> `frappe-crm` -> Package settings -> Change visibility -> Public). The manifests have no `imagePullSecrets`, so nothing needs copying into the cluster. The image only contains open-source Frappe/CRM code; secrets come from OpenBao at runtime.
 
 ## 2. Authentik
 
@@ -74,14 +74,7 @@ Kubernetes auth role `frappe-crm`: service account `frappe-crm-eso`, namespace `
 
 ## 4. Cluster
 
-Create the namespace (or wait for the first sync) and copy the GHCR pull secret, same as directory-service:
-
-```bash
-kubectl create namespace frappe-crm --dry-run=client -o yaml | kubectl apply -f -
-kubectl get secret ghcr-pull-secret -n ticketing -o json \
-  | jq 'del(.metadata.namespace, .metadata.resourceVersion, .metadata.uid, .metadata.creationTimestamp, .metadata.ownerReferences, .metadata.managedFields, .metadata.annotations)' \
-  | kubectl apply -n frappe-crm -f -
-```
+Nothing to do by hand. ArgoCD creates the `frappe-crm` namespace (`CreateNamespace=true`) and everything in it.
 
 ## 5. DNS / tunnel / routing
 
@@ -110,16 +103,16 @@ spec:
 
 Do not add the `authentik-global-auth` forward-auth middleware: Frappe does its own OIDC login, and forward auth in front of it would break the OAuth callback and API calls.
 
-## 6. Register with ArgoCD
+## 6. Register with ArgoCD (UI)
 
-```bash
-kubectl apply -f argocd/application.yaml
-```
+In the ArgoCD UI (`https://argocd.monashautomation.com`): **+ New App** -> **Edit as YAML**, paste the contents of `argocd/application.yaml`, then **Save** and **Create**. (Or fill the form: name `frappe-crm`, project `default`, sync policy Automatic with Prune + Self Heal + Auto-Create Namespace, repo `https://github.com/monashautomation/Frappe-CRM-ArgoCD.git`, revision `main`, path `deploy/overlays/prod`, cluster `https://kubernetes.default.svc`, namespace `frappe-crm`.)
+
+If the repo is private, add it first under Settings -> Repositories (same credentials as `directory-service`).
 
 ## 7. First deploy checklist
 
 1. Image tag in `deploy/overlays/prod/kustomization.yaml` is a real `sha-...` (not `latest`).
-2. ArgoCD sync: watch `kubectl logs -n frappe-crm job/frappe-crm-bootstrap -f`. First run takes several minutes (site creation + CRM install).
+2. In the ArgoCD UI open the `frappe-crm` app. Wave 0 (secrets, DB, Redis) goes green, then the `frappe-crm-bootstrap` Job runs; click it -> **Logs** to watch. First run takes several minutes (site creation + CRM install). The Frappe pods appear only after it succeeds.
 3. Open `https://crm.monashautomation.com/crm`, click the Authentik login, confirm you land in CRM as a Sales User.
 4. In Frappe, check **Social Login Key -> authentik** exists and **Portal Settings -> Default Role** is `Sales User`.
 5. Promote yourself: log in as `Administrator` (password from OpenBao `ADMIN_PASSWORD`), give your SSO user `Sales Manager` + `System Manager`.
@@ -127,9 +120,9 @@ kubectl apply -f argocd/application.yaml
 
 ## Troubleshooting
 
-- **Authentik: "redirect URI mismatch"**: the URI must match exactly, including `https`. The Job sets `host_name` so Frappe sends https; confirm with `bench --site crm.monashautomation.com get-config host_name` (or look at `site_config.json`).
+- **Authentik: "redirect URI mismatch"**: the URI must match exactly, including `https`. The Job sets `host_name` so Frappe sends https; check the bootstrap Job logs for the `set-config host_name` step, or in Frappe open the Social Login Key and confirm the redirect URL.
 - **Login works but lands on a blank/portal page**: user got no role. Check Portal Settings default role, then add `Sales User` to the user by hand; existing users are not backfilled.
-- **Bootstrap Job fails midway on first run**: if `bench new-site` died after creating the DB, the retry fails with "database already exists". Drop it: `kubectl exec -n frappe-crm deploy/frappe-crm-mariadb -- mariadb -uroot -p"$MARIADB_ROOT_PASSWORD" -e 'show databases'`, drop the `_xxxx` DB and `rm -rf sites/<site>` from a Frappe pod, then re-sync.
+- **Bootstrap Job fails midway on first run**: if `bench new-site` died after creating the DB, the retry fails with "database already exists". Fix: in the ArgoCD UI delete the `frappe-crm-mariadb-data` PVC and the `frappe-crm-sites` PVC (right-click -> Delete; prune/self-heal recreates them empty, MariaDB restarts fresh), then re-sync. Only safe before any real data exists.
 - **Pods CrashLoop on first sync**: they only start after the hook finishes (wave 2); if the Job is failing they will not exist yet.
 
 ## Not done / decisions to revisit
