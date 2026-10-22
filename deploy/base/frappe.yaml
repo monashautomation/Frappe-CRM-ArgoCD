@@ -27,6 +27,8 @@ spec:
         fsGroup: 1000
         seccompProfile:
           type: RuntimeDefault
+      imagePullSecrets:
+        - name: ghcr-pull-secret
       containers:
         - name: gunicorn
           image: ghcr.io/monashautomation/frappe-crm:latest
@@ -102,6 +104,8 @@ spec:
         fsGroup: 1000
         seccompProfile:
           type: RuntimeDefault
+      imagePullSecrets:
+        - name: ghcr-pull-secret
       containers:
         - name: socketio
           image: ghcr.io/monashautomation/frappe-crm:latest
@@ -177,6 +181,8 @@ spec:
         fsGroup: 1000
         seccompProfile:
           type: RuntimeDefault
+      imagePullSecrets:
+        - name: ghcr-pull-secret
       containers:
         - name: nginx
           image: ghcr.io/monashautomation/frappe-crm:latest
@@ -268,6 +274,8 @@ spec:
         fsGroup: 1000
         seccompProfile:
           type: RuntimeDefault
+      imagePullSecrets:
+        - name: ghcr-pull-secret
       containers:
         - name: worker
           image: ghcr.io/monashautomation/frappe-crm:latest
@@ -320,6 +328,8 @@ spec:
         fsGroup: 1000
         seccompProfile:
           type: RuntimeDefault
+      imagePullSecrets:
+        - name: ghcr-pull-secret
       containers:
         - name: worker
           image: ghcr.io/monashautomation/frappe-crm:latest
@@ -372,6 +382,8 @@ spec:
         fsGroup: 1000
         seccompProfile:
           type: RuntimeDefault
+      imagePullSecrets:
+        - name: ghcr-pull-secret
       containers:
         - name: worker
           image: ghcr.io/monashautomation/frappe-crm:latest
@@ -426,6 +438,8 @@ spec:
         fsGroup: 1000
         seccompProfile:
           type: RuntimeDefault
+      imagePullSecrets:
+        - name: ghcr-pull-secret
       containers:
         - name: scheduler
           image: ghcr.io/monashautomation/frappe-crm:latest

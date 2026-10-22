@@ -22,6 +22,8 @@ spec:
         runAsGroup: 1000
         seccompProfile:
           type: RuntimeDefault
+      imagePullSecrets:
+        - name: ghcr-pull-secret
       initContainers:
         - name: fix-perms
           image: ghcr.io/monashautomation/frappe-crm:latest
