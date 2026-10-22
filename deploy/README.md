@@ -27,7 +27,7 @@ CRM is not in the stock `frappe/erpnext` image, so `image/apps.json` + `.github/
 
 1. Repo is `monashautomation/Frappe-CRM-ArgoCD`. Settings -> Actions -> General -> Workflow permissions -> **Read and write** (push to GHCR, commit tag bump).
 2. Push `main`, then run the **Build image and deploy** workflow once (Actions -> Run workflow). The first sync needs an image that exists.
-3. After the first build, make the GHCR package **public** (GitHub -> your org -> Packages -> `frappe-crm` -> Package settings -> Change visibility -> Public). The manifests have no `imagePullSecrets`, so nothing needs copying into the cluster. The image only contains open-source Frappe/CRM code; secrets come from OpenBao at runtime.
+3. Keep the GHCR package `frappe-crm` **private** (default). Pods pull it with `ghcr-pull-secret`, which an ExternalSecret builds from OpenBao (step 3), so nothing is copied into the cluster by hand.
 
 ## 2. Authentik
 
@@ -61,6 +61,15 @@ In the OpenBao UI (`https://openbao.monashautomation.com/`), enable a KV v2 engi
   | Key                     | Value    |
   | ----------------------- | -------- |
   | `MARIADB_ROOT_PASSWORD` | _random_ |
+
+- `frappe-crm/ghcr`
+
+  | Key        | Value                                                              |
+  | ---------- | ------------------------------------------------------------------ |
+  | `username` | GitHub username (or bot account) the token belongs to              |
+  | `token`    | GitHub personal access token (classic) with only `read:packages`   |
+
+  Use the same token the other apps' `ghcr-pull-secret` was made from, or a new one from a bot/service account. If the org enforces SAML SSO, authorize the token for the org.
 
 Policy `frappe-crm-read`:
 
