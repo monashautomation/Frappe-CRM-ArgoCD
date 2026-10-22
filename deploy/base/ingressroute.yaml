@@ -1,0 +1,19 @@
+# TLS terminates at the Cloudflare Tunnel (same as the other apps), so no cert-manager here.
+# Deliberately no authentik-global-auth middleware: Frappe does its own OIDC login, and
+# forward auth in front of it would break the OAuth callback and API calls.
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: frappe-crm-route
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`crm.monashautomation.com`)
+      kind: Rule
+      services:
+        - name: frappe-crm-nginx
+          port: 80
+          scheme: http

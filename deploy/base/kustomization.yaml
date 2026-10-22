@@ -8,6 +8,7 @@ resources:
   - redis.yaml
   - bootstrap-job.yaml
   - frappe.yaml
+  - ingressroute.yaml
 configMapGenerator:
   - name: frappe-crm-bootstrap
     files:
