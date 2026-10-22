@@ -58,7 +58,10 @@ def upsert_social_login_key():
     doc.save(ignore_permissions=True)
 
 
-frappe.init(site=SITE, sites_path="/home/frappe/frappe-bench/sites")
+# Frappe logs to ../logs relative to the cwd, so it must run from sites/ like bench does;
+# from the bench root it tries /home/frappe/logs and fails.
+os.chdir("/home/frappe/frappe-bench/sites")
+frappe.init(site=SITE, sites_path=".")
 frappe.connect()
 try:
     ensure_role(DEFAULT_ROLE)
