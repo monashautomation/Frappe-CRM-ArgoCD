@@ -1,6 +1,6 @@
 # Frappe CRM - production setup
 
-Same shape as `directory-service`: Kustomize in `deploy/`, ArgoCD Application in `argocd/`, OpenBao via External Secrets, Traefik IngressRoute (central routes file), `nfs-client` storage, image built to GHCR by GitHub Actions.
+Same shape as `directory-service`: Kustomize in `deploy/`, ArgoCD Application in `argocd/`, OpenBao via External Secrets, Traefik IngressRoute, `nfs-client` storage, image built to GHCR by GitHub Actions.
 
 Served at `https://crm.monashautomation.com`, namespace `frappe-crm`.
 
