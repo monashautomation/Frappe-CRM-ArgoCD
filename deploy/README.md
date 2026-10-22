@@ -11,7 +11,7 @@ Served at `https://crm.monashautomation.com`, namespace `frappe-crm`.
 | 0    | ExternalSecrets, ConfigMap, PVCs, MariaDB, Redis (cache + queue)                                                             |
 | 1    | `frappe-crm-bootstrap` hook Job: writes site config, creates site + installs CRM (first run) or `bench migrate`, configures SSO |
 | 2    | gunicorn, nginx, socketio, 3 workers, scheduler                                                                              |
-| 3    | (none - routing is the central IngressRoute, see step 5)                                                                                |
+| 3    | Traefik IngressRoute (`crm.monashautomation.com`)                                                                                |
 
 CRM is not in the stock `frappe/erpnext` image, so `image/apps.json` + `.github/workflows/build-image.yml` build a Frappe v16 image with CRM baked in (frappe_docker layered build). Pushing to `main` with changes under `image/`, a weekly cron, or a manual run rebuilds it and commits the new tag to `deploy/overlays/prod/kustomization.yaml`.
 
@@ -80,26 +80,7 @@ Nothing to do by hand. ArgoCD creates the `frappe-crm` namespace (`CreateNamespa
 
 `crm.monashautomation.com` must reach the same Traefik as the other apps (wildcard record or Cloudflare Tunnel hostname). TLS ends at the tunnel, as for the other apps, so there is no cert-manager certificate.
 
-Routing is **not** in this repo. Add this to the central IngressRoute file (alongside `kan`, `inventory`, etc.). The app is unreachable until it is applied:
-
-```yaml
----
-apiVersion: traefik.io/v1alpha1
-kind: IngressRoute
-metadata:
-  name: frappe-crm-route
-  namespace: frappe-crm
-spec:
-  entryPoints:
-    - websecure
-  routes:
-  - match: Host(`crm.monashautomation.com`)
-    kind: Rule
-    services:
-    - name: frappe-crm-nginx
-      port: 80
-      scheme: http
-```
+Routing **is** in this repo: `deploy/base/ingressroute.yaml` is a Traefik `IngressRoute` for `crm.monashautomation.com` -> `frappe-crm-nginx:80`, deployed by ArgoCD with the app (wave 3). Traefik picks up IngressRoutes from any namespace, so nothing needs adding to a central routes file.
 
 Do not add the `authentik-global-auth` forward-auth middleware: Frappe does its own OIDC login, and forward auth in front of it would break the OAuth callback and API calls.
 
