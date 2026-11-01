@@ -2,5 +2,9 @@
   {
     "url": "https://github.com/frappe/crm",
     "branch": "main"
+  },
+  {
+    "url": "https://github.com/MohammedNoureldin/frappe-oidc-extended",
+    "branch": "main"
   }
 ]

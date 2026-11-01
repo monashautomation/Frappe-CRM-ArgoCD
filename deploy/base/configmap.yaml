@@ -10,8 +10,26 @@ data:
   REDIS_QUEUE: "redis://frappe-crm-redis-queue:6379"
   AUTHENTIK_BASE_URL: "https://auth.monashautomation.com"
   AUTHENTIK_PROVIDER_NAME: "authentik"
-  # Role given to every account created by first SSO login. It has desk access, so
-  # Frappe promotes the account to System User; CRM refuses plain Website Users.
+  # Scopes requested from Authentik. "groups" is needed so the ID token carries the
+  # user's groups, which oidc_extended maps to Frappe Role Profiles at every login.
+  AUTHENTIK_SCOPES: "openid email profile groups"
+  # Group -> Frappe role mapping (applied by the bootstrap Job, enforced by oidc_extended
+  # on every login). role_profiles defines bundles of Frappe roles; group_role_profiles maps
+  # Authentik group names to a bundle; users in no listed group get fallback_role_profiles.
+  # Edit group names to match your Authentik groups, merge, and Sync.
+  SSO_ROLE_MAPPING: |
+    {
+      "role_profiles": {
+        "CRM Sales User": ["Sales User"],
+        "CRM Sales Manager": ["Sales User", "Sales Manager"]
+      },
+      "group_role_profiles": {
+        "crm-managers": ["CRM Sales Manager"]
+      },
+      "fallback_role_profiles": ["CRM Sales User"]
+    }
+  # Fallback only, used when oidc_extended is not installed: role given to accounts created
+  # by first SSO login. It has desk access, so Frappe promotes them to System User.
   SSO_DEFAULT_ROLE: "Sales User"
   # Set to "1" once SSO is verified to hide the username/password form. Keep "0" until
   # you are sure an Authentik outage can't lock you out (recovery then needs kubectl exec
