@@ -2,10 +2,7 @@
 # Deliberately no authentik-global-auth middleware: Frappe does its own OIDC login, and
 # forward auth in front of it would break the OAuth callback and API calls.
 #
-# One Frappe site serves two hostnames (nginx pins the site via FRAPPE_SITE_NAME_HEADER, so
-# the Host header doesn't matter to Frappe). Only the landing page differs:
-#   crm.monashautomation.com  -> /crm   (Frappe CRM UI)
-#   desk.monashautomation.com -> /desk  (Frappe desk, the central control area)
+# crm.monashautomation.com is the only entry point; its root lands on /crm.
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
 metadata:
@@ -16,18 +13,6 @@ spec:
   redirectRegex:
     regex: '^https://crm\.monashautomation\.com/?(\?.*)?$'
     replacement: 'https://crm.monashautomation.com/crm$1'
-    permanent: false
----
-apiVersion: traefik.io/v1alpha1
-kind: Middleware
-metadata:
-  name: frappe-crm-root-to-desk
-  annotations:
-    argocd.argoproj.io/sync-wave: "3"
-spec:
-  redirectRegex:
-    regex: '^https://desk\.monashautomation\.com/?(\?.*)?$'
-    replacement: 'https://desk.monashautomation.com/desk$1'
     permanent: false
 ---
 # Access is managed only through Authentik groups, so the CRM "invite by email" API is
@@ -53,7 +38,7 @@ spec:
   entryPoints:
     - websecure
   routes:
-    - match: (Host(`crm.monashautomation.com`) || Host(`desk.monashautomation.com`)) && PathPrefix(`/api/method/crm.api.invite_by_email`)
+    - match: Host(`crm.monashautomation.com`) && PathPrefix(`/api/method/crm.api.invite_by_email`)
       kind: Rule
       priority: 30
       middlewares:
@@ -62,7 +47,7 @@ spec:
         - name: frappe-crm-nginx
           port: 80
           scheme: http
-    # Bare root of each host goes to its own area (higher priority than the catch-all rules).
+    # Bare root goes to /crm (higher priority than the catch-all rule).
     - match: Host(`crm.monashautomation.com`) && Path(`/`)
       kind: Rule
       priority: 20
@@ -72,16 +57,7 @@ spec:
         - name: frappe-crm-nginx
           port: 80
           scheme: http
-    - match: Host(`desk.monashautomation.com`) && Path(`/`)
-      kind: Rule
-      priority: 20
-      middlewares:
-        - name: frappe-crm-root-to-desk
-      services:
-        - name: frappe-crm-nginx
-          port: 80
-          scheme: http
-    - match: Host(`crm.monashautomation.com`) || Host(`desk.monashautomation.com`)
+    - match: Host(`crm.monashautomation.com`)
       kind: Rule
       services:
         - name: frappe-crm-nginx
