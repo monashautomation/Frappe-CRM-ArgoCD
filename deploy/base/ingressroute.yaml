@@ -30,6 +30,19 @@ spec:
     replacement: 'https://desk.monashautomation.com/desk$1'
     permanent: false
 ---
+# Access is managed only through Authentik groups, so the CRM "invite by email" API is
+# closed to everyone (an empty-looking allow list of loopback only => 403 for all clients).
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: frappe-crm-block-invite
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  ipAllowList:
+    sourceRange:
+      - 127.0.0.1/32
+---
 apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
 metadata:
@@ -40,6 +53,15 @@ spec:
   entryPoints:
     - websecure
   routes:
+    - match: (Host(`crm.monashautomation.com`) || Host(`desk.monashautomation.com`)) && PathPrefix(`/api/method/crm.api.invite_by_email`)
+      kind: Rule
+      priority: 30
+      middlewares:
+        - name: frappe-crm-block-invite
+      services:
+        - name: frappe-crm-nginx
+          port: 80
+          scheme: http
     # Bare root of each host goes to its own area (higher priority than the catch-all rules).
     - match: Host(`crm.monashautomation.com`) && Path(`/`)
       kind: Rule

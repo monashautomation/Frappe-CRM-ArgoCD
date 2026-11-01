@@ -14,19 +14,29 @@ data:
   # user's groups, which oidc_extended maps to Frappe Role Profiles at every login.
   AUTHENTIK_SCOPES: "openid email profile groups"
   # Group -> Frappe role mapping (applied by the bootstrap Job, enforced by oidc_extended
-  # on every login). role_profiles defines bundles of Frappe roles; group_role_profiles maps
-  # Authentik group names to a bundle; users in no listed group get fallback_role_profiles.
-  # Edit group names to match your Authentik groups, merge, and Sync.
+  # on every login, so changing a user's Authentik group changes their access next login).
+  # Group names must match the Authentik groups exactly. A user in several groups gets the
+  # union of their profiles. fallback_role_profiles is empty on purpose: someone in none of
+  # the three groups gets no CRM roles. Also bind only these groups to the Authentik
+  # application, so ungrouped users can't log in at all.
+  #   crm-admin   -> System Manager (desk / full control) + CRM manager rights
+  #   crm-manager -> Sales Manager (CRM settings, team-wide visibility)
+  #   crm-user    -> Sales User (day-to-day CRM)
+  # Inviting is a Sales Manager/System Manager action in CRM; it is blocked at the ingress
+  # (see ingressroute.yaml) so all access is granted only through Authentik groups.
   SSO_ROLE_MAPPING: |
     {
       "role_profiles": {
-        "CRM Sales User": ["Sales User"],
-        "CRM Sales Manager": ["Sales User", "Sales Manager"]
+        "CRM Admin": ["System Manager", "Sales Manager", "Sales User"],
+        "CRM Sales Manager": ["Sales Manager", "Sales User"],
+        "CRM Sales User": ["Sales User"]
       },
       "group_role_profiles": {
-        "crm-managers": ["CRM Sales Manager"]
+        "crm-admin": ["CRM Admin"],
+        "crm-manager": ["CRM Sales Manager"],
+        "crm-user": ["CRM Sales User"]
       },
-      "fallback_role_profiles": ["CRM Sales User"]
+      "fallback_role_profiles": []
     }
   # Fallback only, used when oidc_extended is not installed: role given to accounts created
   # by first SSO login. It has desk access, so Frappe promotes them to System User.
