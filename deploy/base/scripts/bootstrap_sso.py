@@ -71,6 +71,8 @@ try:
         "System Settings", "disable_user_pass_login", 1 if DISABLE_PASSWORD_LOGIN else 0
     )
     frappe.db.commit()
-    print(f"SSO configured: provider={PROVIDER} default_role={DEFAULT_ROLE}")
+    # Client ID is not a secret; log a prefix so a stale OpenBao/ExternalSecret value is visible.
+    print(f"SSO configured: provider={PROVIDER} default_role={DEFAULT_ROLE} "
+          f"client_id={CLIENT_ID[:4]}...{CLIENT_ID[-4:]} (len {len(CLIENT_ID)})")
 finally:
     frappe.destroy()
