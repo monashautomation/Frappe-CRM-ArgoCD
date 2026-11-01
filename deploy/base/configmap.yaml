@@ -19,7 +19,7 @@ data:
   # union of their profiles. fallback_role_profiles is empty on purpose: someone in none of
   # the three groups gets no CRM roles. Also bind only these groups to the Authentik
   # application, so ungrouped users can't log in at all.
-  #   crm-admin   -> Sales Master Manager + Sales Manager + Sales User
+  #   crm-admin   -> System Manager + Sales Master Manager + Sales Manager + Sales User
   #   crm-manager -> Sales Manager (CRM settings, team-wide visibility)
   #   crm-user    -> Sales User (day-to-day CRM)
   # Inviting is a Sales Manager/System Manager action in CRM; it is blocked at the ingress
@@ -27,7 +27,7 @@ data:
   SSO_ROLE_MAPPING: |
     {
       "role_profiles": {
-        "CRM Admin": ["Sales Master Manager", "Sales Manager", "Sales User"],
+        "CRM Admin": ["System Manager", "Sales Master Manager", "Sales Manager", "Sales User"],
         "CRM Sales Manager": ["Sales Manager", "Sales User"],
         "CRM Sales User": ["Sales User"]
       },
