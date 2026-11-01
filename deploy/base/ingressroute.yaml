@@ -1,6 +1,33 @@
 # TLS terminates at the Cloudflare Tunnel (same as the other apps), so no cert-manager here.
 # Deliberately no authentik-global-auth middleware: Frappe does its own OIDC login, and
 # forward auth in front of it would break the OAuth callback and API calls.
+#
+# crm.monashautomation.com is the only entry point; its root lands on /crm.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: frappe-crm-root-to-crm
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  redirectRegex:
+    regex: '^https://crm\.monashautomation\.com/?(\?.*)?$'
+    replacement: 'https://crm.monashautomation.com/crm$1'
+    permanent: false
+---
+# Access is managed only through Authentik groups, so the CRM "invite by email" API is
+# closed to everyone (an empty-looking allow list of loopback only => 403 for all clients).
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: frappe-crm-block-invite
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  ipAllowList:
+    sourceRange:
+      - 127.0.0.1/32
+---
 apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
 metadata:
@@ -11,6 +38,25 @@ spec:
   entryPoints:
     - websecure
   routes:
+    - match: Host(`crm.monashautomation.com`) && PathPrefix(`/api/method/crm.api.invite_by_email`)
+      kind: Rule
+      priority: 30
+      middlewares:
+        - name: frappe-crm-block-invite
+      services:
+        - name: frappe-crm-nginx
+          port: 80
+          scheme: http
+    # Bare root goes to /crm (higher priority than the catch-all rule).
+    - match: Host(`crm.monashautomation.com`) && Path(`/`)
+      kind: Rule
+      priority: 20
+      middlewares:
+        - name: frappe-crm-root-to-crm
+      services:
+        - name: frappe-crm-nginx
+          port: 80
+          scheme: http
     - match: Host(`crm.monashautomation.com`)
       kind: Rule
       services:
