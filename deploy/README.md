@@ -17,7 +17,7 @@ CRM is not in the stock `frappe/erpnext` image, so `image/apps.json` + `.github/
 
 ## SSO, provisioning and role mapping
 
-Login uses Frappe's **Social Login Key** `authentik` plus the third-party app [frappe-oidc-extended](https://github.com/MohammedNoureldin/frappe-oidc-extended), baked into the image (`image/apps.json`). Frappe on its own ignores the `groups` claim; this app adds it.
+Login uses Frappe's **Social Login Key** `authentik` plus the third-party app [frappe-oidc-extended](https://github.com/monashautomation/frappe-oidc-extended) (org fork of the upstream project, with a one-line `setup.py` fix), baked into the image (`image/apps.json`). Frappe on its own ignores the `groups` claim; this app adds it.
 
 - The bootstrap Job writes the Social Login Key from OpenBao and creates the **OIDC Extended Configuration** and **Role Profiles** from the `SSO_ROLE_MAPPING` JSON in `deploy/base/configmap.yaml`. Config is code and is re-applied on every Sync.
 - On **every login** the app creates the user if needed (as a System User, username = Authentik `preferred_username`) and sets their **Role Profiles** from their Authentik groups: groups listed in `group_role_profiles` map to profiles; users in none of them get `fallback_role_profiles`. Changes in Authentik take effect at the user's next login.
@@ -132,7 +132,7 @@ If the repo is private, add it first under Settings -> Repositories (same creden
 
 ## Not done / decisions to revisit
 
-- **Pin `oidc_extended`**: fork it into the org and pin `image/apps.json` to the fork; it is a small third-party app.
+- **Upstream drift for `oidc_extended`**: the org fork tracks `main`; periodically merge upstream changes, or pin `image/apps.json` to a tag on the fork.
 - **Backups**: MariaDB is a single pod on NFS with no backup job. Add a `bench backup` CronJob or mysqldump to your usual target.
 - **CRM version**: `image/apps.json` tracks CRM `main`, so a weekly rebuild can bring breaking changes. Pin a tag/branch there once stable.
 - Frappe/ERPNext-on-NFS sites volume is shared RWX; fine for this scale.
