@@ -15,13 +15,26 @@ Served at `https://crm.monashautomation.com`, namespace `frappe-crm`.
 
 CRM is not in the stock `frappe/erpnext` image, so `image/apps.json` + `.github/workflows/build-image.yml` build a Frappe v16 image with CRM baked in (frappe_docker layered build). Pushing to `main` with changes under `image/`, a weekly cron, or a manual run rebuilds it and commits the new tag to `deploy/overlays/prod/kustomization.yaml`.
 
-## SSO and automatic provisioning
+## SSO, provisioning and role mapping
 
-- The bootstrap Job creates a Frappe **Social Login Key** `authentik` (Sign ups = Allow) from the OpenBao secrets, so the config is code, not click-ops, and is re-applied every sync.
-- First Authentik login creates the Frappe user automatically. Frappe creates these as _Website Users with no roles_, which cannot open `/crm`, so the Job sets **Portal Settings -> Default Role = Sales User** (desk access, so Frappe promotes them to System User).
-- **Access control lives in Authentik.** Anyone who can pass authorization for the application gets a CRM account. Bind the application to the groups that should have CRM (policy bindings), do not leave it open to all users.
-- Promotion to **Sales Manager** / System Manager is manual in Frappe (Users -> roles). Frappe cannot map Authentik groups to roles natively; if you want that, it needs a small hook (see "Not done").
-- Existing Frappe users match by email, so `Administrator` keeps working with its password.
+Login uses Frappe's **Social Login Key** `authentik` plus the third-party app [frappe-oidc-extended](https://github.com/MohammedNoureldin/frappe-oidc-extended), baked into the image (`image/apps.json`). Frappe on its own ignores the `groups` claim; this app adds it.
+
+- The bootstrap Job writes the Social Login Key from OpenBao and creates the **OIDC Extended Configuration** and **Role Profiles** from the `SSO_ROLE_MAPPING` JSON in `deploy/base/configmap.yaml`. Config is code and is re-applied on every Sync.
+- On **every login** the app creates the user if needed (as a System User, username = Authentik `preferred_username`) and sets their **Role Profiles** from their Authentik groups: groups listed in `group_role_profiles` map to profiles; users in none of them get `fallback_role_profiles`. Changes in Authentik take effect at the user's next login.
+- Default mapping: everyone gets `CRM Sales User` (role `Sales User`); members of the Authentik group `crm-managers` get `CRM Sales Manager`. **Edit the group names in the ConfigMap to match your groups**, merge, and Sync.
+- **Who can log in at all is still controlled in Authentik** (application policy bindings). Anyone Authentik lets through gets at least the fallback profile.
+- The app refuses OIDC login for a user named `Administrator`. Use the local login for that account.
+- `System Manager` is deliberately not mapped; grant it by hand in Frappe if you want it.
+- If the running image doesn't contain `oidc_extended` yet, the Job logs a warning and uses Frappe's standard callback (default role `Sales User`) so login still works.
+
+### Rolling out the app (order matters)
+
+1. Merge the PR. Pushing `image/apps.json` triggers the image build, which commits a new `sha-...` tag.
+2. In Authentik, **add** the new redirect URI (keep the old one until the cutover is done), and add the `groups` scope: see step 2.
+3. ArgoCD syncs the new image; the Job installs the app and switches the Social Login Key to the new callback. Check the Job log ends with `SSO configured: mode=extended ...`.
+4. Remove the old redirect URI from Authentik.
+
+Risks: the app is small, unreleased and tracks its `main` branch (last upstream activity checked: March 2026). Fork it into the org and point `apps.json` at the fork to pin it. It does not verify the ID token signature (it relies on the TLS-protected token endpoint) and its role sync assumes Frappe's `role_profiles` model (v16).
 
 ## 1. GitHub repo
 
@@ -37,9 +50,11 @@ At `https://auth.monashautomation.com/if/admin/`:
    - Name `frappe-crm`, same authorization flow as directory-service.
    - Client type **Confidential**.
    - Redirect URI, **Strict**, type **Authorization**:
-     `https://crm.monashautomation.com/api/method/frappe.integrations.oauth2_logins.custom/authentik`
-     (authentik < 2026.5 treats every redirect URI as Authorization; add only this one and no post-logout URI.)
-   - Scopes: `openid`, `email`, `profile`. Frappe reads `email` from userinfo, so the email scope mapping must be present.
+     `https://crm.monashautomation.com/api/method/oidc_extended.callback.custom/authentik`
+     (During migration from the standard callback, also keep
+     `https://crm.monashautomation.com/api/method/frappe.integrations.oauth2_logins.custom/authentik` until the new one works, then delete it.
+     authentik < 2026.5 treats every redirect URI as Authorization; add no post-logout URI.)
+   - Scopes: `openid`, `email`, `profile`, and the **groups** scope mapping (the same custom `groups` mapping directory-service uses). The ID token must carry `groups`, `email`, `preferred_username`, `given_name` and `family_name`; check the provider includes claims in the ID token (default).
    - Copy Client ID and Client Secret.
 2. **Applications -> Create**: name `Frappe CRM`, slug `frappe-crm`, the provider above, launch URL `https://crm.monashautomation.com/crm`.
 3. **Policy bindings on the application**: bind the group(s) allowed to use CRM (see warning above).
@@ -117,7 +132,7 @@ If the repo is private, add it first under Settings -> Repositories (same creden
 
 ## Not done / decisions to revisit
 
-- **Group -> role mapping** (e.g. `infrastructure` -> Sales Manager): Frappe ignores the `groups` claim. Would need a small custom app or a Server Script on User login.
+- **Pin `oidc_extended`**: fork it into the org and pin `image/apps.json` to the fork; it is a small third-party app.
 - **Backups**: MariaDB is a single pod on NFS with no backup job. Add a `bench backup` CronJob or mysqldump to your usual target.
 - **CRM version**: `image/apps.json` tracks CRM `main`, so a weekly rebuild can bring breaking changes. Pin a tag/branch there once stable.
 - Frappe/ERPNext-on-NFS sites volume is shared RWX; fine for this scale.

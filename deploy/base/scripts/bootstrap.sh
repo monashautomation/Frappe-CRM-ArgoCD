@@ -38,6 +38,17 @@ else
   rm -f sites/currentsite.txt
 fi
 
+# oidc_extended (group -> role mapping at login) is baked into the image. Installed
+# idempotently; if the running image predates it, fall back to Frappe's standard callback.
+if [[ -d apps/oidc_extended ]]; then
+  if ! bench --site "${SITE_NAME}" list-apps | grep -qw oidc_extended; then
+    echo "Installing oidc_extended..."
+    bench --site "${SITE_NAME}" install-app oidc_extended
+  fi
+else
+  echo "WARNING: oidc_extended is not in this image; using Frappe's standard social login callback."
+fi
+
 # Frappe's nginx forwards X-Forwarded-Proto as plain http, so without host_name the
 # OAuth redirect_uri sent to Authentik would be http:// and fail the strict match.
 bench --site "${SITE_NAME}" set-config host_name "https://${SITE_NAME}"
