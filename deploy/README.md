@@ -2,7 +2,7 @@
 
 Same shape as `directory-service`: Kustomize in `deploy/`, ArgoCD Application in `argocd/`, OpenBao via External Secrets, Traefik IngressRoute, `nfs-client` storage, image built to GHCR by GitHub Actions.
 
-Served at `https://crm.monashautomation.com`, namespace `frappe-crm`.
+Served at `https://crm.monashautomation.com` (CRM, lands on `/crm`) and `https://desk.monashautomation.com` (Frappe desk / central control area, lands on `/desk`), namespace `frappe-crm`. Both hostnames are one Frappe site (`SITE_NAME` stays `crm.monashautomation.com`).
 
 ## How it fits together
 
@@ -102,7 +102,7 @@ Nothing to do by hand. ArgoCD creates the `frappe-crm` namespace (`CreateNamespa
 
 ## 5. DNS / tunnel / routing
 
-`crm.monashautomation.com` must reach the same Traefik as the other apps (wildcard record or Cloudflare Tunnel hostname). TLS ends at the tunnel, as for the other apps, so there is no cert-manager certificate.
+`crm.monashautomation.com` and `desk.monashautomation.com` must both reach the same Traefik as the other apps (wildcard record or Cloudflare Tunnel hostname). TLS ends at the tunnel, as for the other apps, so there is no cert-manager certificate.
 
 Routing **is** in this repo: `deploy/base/ingressroute.yaml` is a Traefik `IngressRoute` for `crm.monashautomation.com` -> `frappe-crm-nginx:80`, deployed by ArgoCD with the app (wave 3). Traefik picks up IngressRoutes from any namespace, so nothing needs adding to a central routes file.
 

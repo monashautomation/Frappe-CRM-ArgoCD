@@ -1,6 +1,35 @@
 # TLS terminates at the Cloudflare Tunnel (same as the other apps), so no cert-manager here.
 # Deliberately no authentik-global-auth middleware: Frappe does its own OIDC login, and
 # forward auth in front of it would break the OAuth callback and API calls.
+#
+# One Frappe site serves two hostnames (nginx pins the site via FRAPPE_SITE_NAME_HEADER, so
+# the Host header doesn't matter to Frappe). Only the landing page differs:
+#   crm.monashautomation.com  -> /crm   (Frappe CRM UI)
+#   desk.monashautomation.com -> /desk  (Frappe desk, the central control area)
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: frappe-crm-root-to-crm
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  redirectRegex:
+    regex: '^https://crm\.monashautomation\.com/?(\?.*)?$'
+    replacement: 'https://crm.monashautomation.com/crm$1'
+    permanent: false
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: frappe-crm-root-to-desk
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  redirectRegex:
+    regex: '^https://desk\.monashautomation\.com/?(\?.*)?$'
+    replacement: 'https://desk.monashautomation.com/desk$1'
+    permanent: false
+---
 apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
 metadata:
@@ -11,7 +40,26 @@ spec:
   entryPoints:
     - websecure
   routes:
-    - match: Host(`crm.monashautomation.com`)
+    # Bare root of each host goes to its own area (higher priority than the catch-all rules).
+    - match: Host(`crm.monashautomation.com`) && Path(`/`)
+      kind: Rule
+      priority: 20
+      middlewares:
+        - name: frappe-crm-root-to-crm
+      services:
+        - name: frappe-crm-nginx
+          port: 80
+          scheme: http
+    - match: Host(`desk.monashautomation.com`) && Path(`/`)
+      kind: Rule
+      priority: 20
+      middlewares:
+        - name: frappe-crm-root-to-desk
+      services:
+        - name: frappe-crm-nginx
+          port: 80
+          scheme: http
+    - match: Host(`crm.monashautomation.com`) || Host(`desk.monashautomation.com`)
       kind: Rule
       services:
         - name: frappe-crm-nginx
