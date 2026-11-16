@@ -24,15 +24,15 @@ data:
   #   crm-user    -> Sales User (day-to-day CRM)
   # Inviting is a Sales Manager/System Manager action in CRM; it is blocked at the ingress
   # (see ingressroute.yaml) so all access is granted only through Authentik groups.
-  #### Removed
-  #      "role_profiles": {
-  #      "CRM Admin": ["System Manager", "Sales Master Manager", "Sales Manager", "Sales User"],
-  #      "CRM Sales Manager": ["Sales Manager", "Sales User"],
-  #      "CRM Sales User": ["Sales User"]
-  #    },
-
+  # group_role_profiles values must be names of Role PROFILES (defined in role_profiles below),
+  # not plain Roles: the bootstrap saves them as links, and a missing profile fails the Job.
   SSO_ROLE_MAPPING: |
     {
+      "role_profiles": {
+        "Sales Master Manager": ["Sales Master Manager"],
+        "Sales Manager": ["Sales Manager"],
+        "Sales User": ["Sales User"]
+      },
       "group_role_profiles": {
         "crm-admin": ["Sales Master Manager"],
         "crm-manager": ["Sales Manager"],
