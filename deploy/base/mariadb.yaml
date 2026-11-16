@@ -52,6 +52,9 @@ spec:
                 secretKeyRef:
                   name: frappe-crm-mariadb-secrets
                   key: MARIADB_ROOT_PASSWORD
+          # max_connections: the default (151) is exhausted by gunicorn workers, socketio, the RQ
+          # workers and the scheduler, so the bootstrap Job's `bench migrate` failed with
+          # "(1040, 'Too many connections')".
           # First four are Frappe's required MariaDB settings.
           # innodb_flush_log_at_trx_commit=2: the datadir is on nfs-client, where every
           # redo-log fsync round-trips over the network. Trades up to ~1s of commits on a
@@ -63,6 +66,7 @@ spec:
             - --skip-character-set-client-handshake
             - --skip-innodb-read-only-compress
             - --innodb-flush-log-at-trx-commit=2
+            - --max-connections=300
           ports:
             - containerPort: 3306
           volumeMounts:
